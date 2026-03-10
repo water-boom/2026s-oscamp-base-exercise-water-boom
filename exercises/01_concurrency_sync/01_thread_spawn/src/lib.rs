@@ -1,38 +1,39 @@
 //! # Thread Creation
 //!
 //! In this exercise, you will learn how to create threads and pass data between threads.
-//!
-//! ## Concepts
-//! - `std::thread::spawn` creates a new thread
-//! - `move` closures capture variable ownership
-//! - `JoinHandle::join()` waits for thread completion and retrieves return value
-//!
-//! ## Advanced Thread Operations
-//! - **Thread sleep**: `thread::sleep` pauses the current thread.
-//! - **Thread‑local storage**: `thread_local!` macro defines static variables unique to each thread.
-//! - **Thread naming**: `Builder::name` assigns a name for debugging.
-//! - **Thread priority**: Set via `thread::Builder` (platform‑dependent).
-//! - **Thread pools**: Libraries like `rayon` manage thread reuse.
-//! - **Thread communication**: Use `std::sync::mpsc` (multi‑producer single‑consumer) or third‑party crates (e.g., `crossbeam`).
-//! - **Shared state**: `Arc<Mutex<T>>` or `Arc<RwLock<T>>` safely share mutable data across threads.
-//! - **Synchronization primitives**: `Barrier` synchronizes multiple threads, `Condvar` implements condition variables.
-//! - **Thread park/unpark**: `thread::park` blocks a thread, `unpark` wakes it, useful for custom scheduling.
-//! - **Get current thread handle**: `thread::current()`.
-//! - **Scoped threads**: `crossbeam::scope` or standard‑library `thread::scope` (Rust 1.63+) allow threads to borrow stack data without `move`.
-//!
-//! Rust statically prevents data races through the ownership system and the `Send` and `Sync` traits.
-//! Types that implement `Send` can be transferred across thread boundaries.
-//! Types that implement `Sync` can be referenced from multiple threads simultaneously.
-//! Most Rust standard types are `Send + Sync`; exceptions include `Rc<T>` (non‑atomic reference counting) and raw pointers.
-//!
-//! ## Exercise Structure
-//! 1. **Basic exercises** (`double_in_thread`, `parallel_sum`) – introduce fundamental thread creation.
-//! 2. **Advanced exercises** (`named_sleeper`, `increment_thread_local`, `scoped_slice_sum`, `handle_panic`) – explore additional thread operations.
-//! Each function includes a `TODO` comment indicating where you need to write code.
-//! Run `cargo test` to check your implementations.
+//！
+//! ## 概念  
+//! - `std::thread::spawn` 创建一个新线程  
+//! - `move` 闭包捕获变量所有权  
+//! - `JoinHandle::join()` 等待线程完成并获取返回值  
+//！
+//! ## 高级线程操作  
+//! - **线程休眠**: `thread::sleep` 暂停当前线程。  
+//! - **线程本地存储**: `thread_local!` 宏定义每个线程唯一的静态变量。  
+//! - **线程命名**: `Builder::name` 为调试分配名称。  
+//! - **线程优先级**: 通过 `thread::Builder` 设置（依赖于平台）。  
+//! - **线程池**: 使用类似 `rayon` 的库管理线程重用。  
+//! - **线程通信**: 使用 `std::sync::mpsc`（多生产者单消费者）或第三方库（如 `crossbeam`）。  
+//! - **共享状态**: 使用 `Arc<Mutex<T>>` 或 `Arc<RwLock<T>>` 安全地在线程间共享可变数据。  
+//! - **同步原语**: `Barrier` 同步多个线程，`Condvar` 实现条件变量。  
+//! - **线程挂起/唤醒**: `thread::park` 阻塞线程，`unpark` 唤醒线程，用于自定义调度。  
+//! - **获取当前线程句柄**: `thread::current()`。  
+//! - **作用域线程**：`crossbeam::scope` 或标准库 `thread::scope`（Rust 1.63+）允许线程在不使用 `move` 的情况下借用栈数据。
+//！
+//! Rust 通过所有权系统以及 `Send` 和 `Sync` 特性静态地防止数据竞争。
+//! 实现 `Send` 的类型可以在线程边界之间传递。
+//! 实现 `Sync` 的类型可以被多个线程同时引用。
+//! 大多数 Rust 标准类型都是 `Send   Sync`；例外包括 `Rc<T>`（非原子引用计数）和裸指针。
+//！
+//! ## 练习结构
+//! 1. **基础练习** (`double_in_thread`, `parallel_sum`) – 介绍基本的线程创建。
+//! 2. **高级练习** (`named_sleeper`, `increment_thread_local`, `scoped_slice_sum`, `handle_panic`) – 探索更多线程操作。
+//! 每个函数都包含一个 `TODO` 注释，指出你需要编写代码的位置。
+//! 运行 `cargo test` 来检查你的实现。
 
 #[allow(unused_imports)]
 use std::cell::RefCell;
+use std::ops::ShrAssign;
 #[allow(unused_imports)]
 use std::thread;
 #[allow(unused_imports)]
@@ -44,11 +45,11 @@ use std::time::Duration;
 // The following examples illustrate additional thread‑related concepts that are
 // useful in real‑world Rust concurrent programming.
 
-/// Example: Handling thread panic.
+/// 示例：处理线程崩溃。  
 ///
-/// `join()` returns a `Result`. If the thread panics, the `Result` is an `Err`.
-/// This demonstrates how to catch and handle a panic from a spawned thread.
-///
+/// `join()` 返回一个 `Result`。如果线程崩溃，`Result` 是一个 `Err`。  
+/// 这展示了如何捕获并处理来自已启动线程的崩溃。  
+
 /// ```rust
 /// use std::thread;
 ///
@@ -64,15 +65,12 @@ use std::time::Duration;
 ///     }
 /// }
 /// ```
-///
-/// In contrast, the exercises below use `unwrap()` for simplicity, assuming
-/// that the threads never panic.
 
-/// Example: Named thread and custom stack size.
+/// 相反，下面的练习为了简单起见使用 `unwrap()`，假设线程永远不会恐慌。
+
+/// 示例：命名线程和自定义堆栈大小。
 ///
-/// Using `thread::Builder` you can assign a name to a thread (helpful for
-/// debugging) and set its stack size.
-///
+/// 使用 `thread::Builder` 可以为线程分配一个名称（有助于调试）并设置其堆栈大小。
 /// ```rust
 /// use std::thread;
 ///
@@ -91,12 +89,10 @@ use std::time::Duration;
 /// }
 /// ```
 
-/// Example: Scoped threads (Rust 1.63+).
-///
-/// Scoped threads allow borrowing stack data without moving ownership.
-/// The threads are guaranteed to finish before the scope ends, so references
-/// remain valid.
-///
+///示例：Scoped 线程（Rust 1.63）。
+///Scoped 线程允许借用栈数据而不转移所有权。
+///这些线程保证在作用域结束之前完成，因此引用保持有效。
+
 /// ```rust
 /// use std::thread;
 ///
@@ -157,7 +153,9 @@ pub fn double_in_thread(numbers: Vec<i32>) -> Vec<i32> {
     // TODO: Create a new thread to multiply each element of numbers by 2
     // Use thread::spawn and move closure
     // Use join().unwrap() to get result
-    todo!()
+    std::thread::spawn(move || numbers.into_iter().map(|x| x * 2).collect())
+        .join()
+        .unwrap()
 }
 
 /// Sum two vectors in parallel, returning a tuple of two sums.
@@ -167,7 +165,10 @@ pub fn double_in_thread(numbers: Vec<i32>) -> Vec<i32> {
 pub fn parallel_sum(a: Vec<i32>, b: Vec<i32>) -> (i32, i32) {
     // TODO: Create two threads to sum a and b respectively
     // Join both threads to get results
-    todo!()
+    let handle_a = std::thread::spawn(move || a.into_iter().sum());
+    let handle_b = std::thread::spawn(move || b.into_iter().sum());
+
+    (handle_a.join().unwrap(), handle_b.join().unwrap())
 }
 
 // ============================================================================
@@ -185,7 +186,14 @@ pub fn named_sleeper(value: i32, ms: u64) -> i32 {
     // TODO: Create a thread builder with name "sleeper"
     // TODO: Spawn a thread that sleeps for `ms` milliseconds and returns `value`
     // TODO: Join the thread and return the value
-    todo!()
+    let builder = std::thread::Builder::new().name("sleeper".into());
+    let handle = builder
+        .spawn(move || {
+            std::thread::sleep(Duration::from_millis(ms));
+            value
+        })
+        .unwrap();
+    handle.join().unwrap()
 }
 
 thread_local! {
@@ -200,7 +208,11 @@ thread_local! {
 /// Hint: Use `THREAD_COUNT.with(|cell| { ... })` to access the thread‑local variable.
 pub fn increment_thread_local() -> usize {
     // TODO: Use THREAD_COUNT.with to increment and return the new count
-    todo!()
+    THREAD_COUNT.with(|cell| {
+        let mut count = cell.borrow_mut();
+        *count += 1;
+        *count
+    })
 }
 
 /// Spawn two threads using a **scoped thread** to compute the sum of two slices without moving ownership.
@@ -216,7 +228,12 @@ pub fn scoped_slice_sum(a: &[i32], b: &[i32]) -> (i32, i32) {
     // TODO: Use thread::scope to spawn two threads
     // TODO: Each thread sums its slice
     // TODO: Wait for both threads and return the results
-    todo!()
+    let (sum_a, sum_b) = thread::scope(|s| {
+        let h1 = s.spawn(|| a.iter().sum::<i32>());
+        let h2 = s.spawn(|| b.iter().sum::<i32>());
+        (h1.join().unwrap(), h2.join().unwrap())
+    });
+    (sum_a, sum_b)
 }
 
 /// Handle a possible panic in a spawned thread.
@@ -233,7 +250,17 @@ pub fn scoped_slice_sum(a: &[i32], b: &[i32]) -> (i32, i32) {
 pub fn handle_panic(value: i32, should_panic: bool) -> Result<i32, ()> {
     // TODO: Spawn a thread that either panics or returns value
     // TODO: Join and map the result appropriately
-    todo!()
+    let handle = thread::spawn(move || {
+        if should_panic {
+            panic!("oops");
+        } else {
+            value
+        }
+    });
+    match handle.join() {
+        Ok(result) => Ok(result),
+        Err(_) => Err(()),
+    }
 }
 
 #[cfg(test)]

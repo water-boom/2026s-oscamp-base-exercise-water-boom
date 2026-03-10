@@ -1,88 +1,84 @@
-//! # Process and Pipes
+//! # 进程与管道
 //!
-//! In this exercise, you will learn how to create child processes and communicate through pipes.
+//! 在本练习中，你将学习如何创建子进程并通过管道进行通信。
 //!
-//! ## Concepts
-//! - `std::process::Command` creates child processes (corresponds to `fork()` + `execve()` system calls)
-//! - `Stdio::piped()` sets up pipes (corresponds to `pipe()` + `dup2()` system calls)
-//! - Communicate with child processes via stdin/stdout
-//! - Obtain child process exit status (corresponds to `waitpid()` system call)
+//! ## 概念
+//! - `std::process::Command` 用于创建子进程（对应 `fork()` 和 `execve()` 系统调用）
+//! - `Stdio::piped()` 用于设置管道（对应 `pipe()` 和 `dup2()` 系统调用）
+//! - 通过 stdin/stdout 与子进程通信
+//! - 获取子进程退出状态（对应 `waitpid()` 系统调用）
+
+//! ## 操作系统概念映射
+//! 本练习展示了用户空间对底层操作系统原语的抽象：
+//! - **进程创建**：Rust 的 `Command::new()` 在内部调用 `fork()` 创建子进程，
+//!   然后调用 `execve()`（或等价方法）将子进程的内存镜像替换为目标程序。
+//! - **进程间通信（IPC）**：管道是由内核管理的缓冲区，允许相关进程之间进行单向数据流。`pipe()` 系统调用创建一个管道，返回两个文件描述符（读端、写端）。`dup2()` 复制一个文件描述符，从而实现标准输入/输出的重定向。
+//! - **资源管理**：文件描述符（包括管道端）在其 Rust `Stdio` 对象被丢弃时会自动关闭，防止资源泄漏。
 //!
-//! ## OS Concepts Mapping
-//! This exercise demonstrates user‑space abstractions over underlying OS primitives:
-//! - **Process creation**: Rust's `Command::new()` internally invokes `fork()` to create a child process,
-//!   then `execve()` (or equivalent) to replace the child's memory image with the target program.
-//! - **Inter‑process communication (IPC)**: Pipes are kernel‑managed buffers that allow one‑way data
-//!   flow between related processes. The `pipe()` system call creates a pipe, returning two file
-//!   descriptors (read end, write end). `dup2()` duplicates a file descriptor, enabling redirection
-//!   of standard input/output.
-//! - **Resource management**: File descriptors (including pipe ends) are automatically closed when
-//!   their Rust `Stdio` objects are dropped, preventing resource leaks.
+//! ## 练习结构
+//! 1. **基本命令执行**（`run_command`）——启动子进程并捕获其 stdout。
+//! 2. **双向管道通信**（`pipe_through_cat`）——向子进程（`cat`）发送数据并读取其输出。
+//! 3. **获取退出码**（`get_exit_code`）——获取子进程的终止状态。
+//! 4. **高级：错误处理版本**（`run_command_with_result`）——学习正确的错误传播方法。
+//! 5. **高级：复杂双向通信**（`pipe_through_grep`）——与读取多行并生成过滤输出的过滤程序进行交互。
 //!
-//! ## Exercise Structure
-//! 1. **Basic command execution** (`run_command`) – launch a child process and capture its stdout.
-//! 2. **Bidirectional pipe communication** (`pipe_through_cat`) – send data to a child process (`cat`)
-//!    and read its output.
-//! 3. **Exit code retrieval** (`get_exit_code`) – obtain the termination status of a child process.
-//! 4. **Advanced: error‑handling version** (`run_command_with_result`) – learn proper error propagation.
-//! 5. **Advanced: complex bidirectional communication** (`pipe_through_grep`) – interact with a filter
-//!    program that reads multiple lines and produces filtered output.
-//!
-//! Each function includes a `TODO` comment indicating where you need to write code.
-//! Run `cargo test` to check your implementations.
+//! 每个函数都包含一个 `TODO` 注释，指示你需要编写代码的位置。
+//! 运行 `cargo test` 来检查你的实现。
 
 use std::io::{self, Read, Write};
 use std::process::{Command, Stdio};
 
-/// Execute the given shell command and return its stdout output.
+/// 执行给定的 shell 命令并返回其标准输出。
 ///
-/// For example: `run_command("echo", &["hello"])` should return `"hello\n"`
+/// 例如：`run_command("echo", &["hello"])` 应该返回 `"hello\n"`
 ///
-/// # Underlying System Calls
-/// - `Command::new(program)` → `fork()` + `execve()` family
-/// - `Stdio::piped()` → `pipe()` + `dup2()` (sets up a pipe for stdout)
-/// - `.output()` → `waitpid()` (waits for child process termination)
+/// # 底层系统调用
+/// - `Command::new(program)` → `fork()` `execve()` 系列
+/// - `Stdio::piped()` → `pipe()` `dup2()`（为 stdout 设置管道）
+/// - `.output()` → `waitpid()`（等待子进程结束）
 ///
-/// # Implementation Steps
-/// 1. Create a `Command` with the given program and arguments.
-/// 2. Set `.stdout(Stdio::piped())` to capture the child's stdout.
-/// 3. Call `.output()` to execute the child and obtain its `Output`.
-/// 4. Convert the `stdout` field (a `Vec<u8>`) into a `String`.
+/// # 实现步骤
+/// 1. 使用给定的程序和参数创建一个 `Command`。
+/// 2. 设置 `.stdout(Stdio::piped())` 以捕获子进程的 stdout。
+/// 3. 调用 `.output()` 来执行子进程并获取其 `Output`。
+/// 4. 将 `stdout` 字段（一个 `Vec<u8>`）转换为 `String`。
+
 pub fn run_command(program: &str, args: &[&str]) -> String {
-    // TODO: Use Command::new to create process
-    // TODO: Set stdout to Stdio::piped()
-    // TODO: Execute with .output() and get output
-    // TODO: Convert stdout to String and return
+    // TODO：使用 Command::new 创建进程
+    // TODO：将 stdout 设置为 Stdio::piped()
+    // TODO：使用 .output() 执行并获取输出
+    // TODO：将 stdout 转换为字符串并返回
     todo!()
 }
 
-/// Write data to child process (cat) stdin via pipe and read its stdout output.
+/// 通过管道向子进程（cat）的标准输入写入数据，并读取其标准输出输出。
 ///
-/// This demonstrates bidirectional pipe communication between parent and child processes.
+/// 这演示了父子进程之间的双向管道通信。
 ///
-/// # Underlying System Calls
-/// - `Command::new("cat")` → `fork()` + `execve("cat")`
-/// - `Stdio::piped()` (twice) → `pipe()` creates two pipes (stdin & stdout) + `dup2()` redirects them
-/// - `ChildStdin::write_all()` → `write()` to the pipe's write end
-/// - `drop(stdin)` → `close()` on the write end, sending EOF to child
-/// - `ChildStdout::read_to_string()` → `read()` from the pipe's read end
+/// # 底层系统调用
+/// - `Command::new("cat")` → `fork()`   `execve("cat")`
+/// - `Stdio::piped()`（两次）→ `pipe()` 创建两个管道（stdin 和 stdout）   `dup2()` 重定向它们
+/// - `ChildStdin::write_all()` → 向管道的写端 `write()`
+/// - `drop(stdin)` → 在写端 `close()`，向子进程发送 EOF
+/// - `ChildStdout::read_to_string()` → 从管道的读端 `read()`
+
 ///
-/// # Ownership and Resource Management
-/// Rust's ownership system ensures pipes are closed at the right time:
-/// 1. The `ChildStdin` handle is owned by the parent; writing to it transfers data to the child.
-/// 2. After writing, we explicitly `drop(stdin)` (or let it go out of scope) to close the write end.
-/// 3. Closing the write end signals EOF to `cat`, causing it to exit after processing all input.
-/// 4. The `ChildStdout` handle is then read to completion; dropping it closes the read end.
+/// # 所有权与资源管理
+/// Rust 的所有权系统确保管道在正确的时间关闭：
+/// 1. “ChildStdin”账户由父方拥有;写入它会将数据传输给子节点。
+/// 2. 写入后，我们明确“drop（stdin）”（或让它离开作用域）以关闭写入端。
+/// 3. 闭合写端信号给 EOF 到“cat”，处理完所有输入后退出。
+/// 4. 然后将“ChildStdout”句柄读取至完整;丢掉它会关闭读端。
 ///
-/// Without dropping `stdin`, the child would wait forever for more input (pipe never closes).
+/// 如果不去掉“stdin”，孩子会等很久才能有更多输入（管道永远不会关闭）。
 ///
-/// # Implementation Steps
-/// 1. Create a `Command` for `"cat"` with `.stdin(Stdio::piped())` and `.stdout(Stdio::piped())`.
-/// 2. `.spawn()` the command to obtain a `Child` with `stdin` and `stdout` handles.
-/// 3. Write `input` bytes to the child's stdin (`child.stdin.take().unwrap().write_all(...)`).
-/// 4. Drop the stdin handle (explicit `drop` or let it go out of scope) to close the pipe.
-/// 5. Read the child's stdout (`child.stdout.take().unwrap().read_to_string(...)`).
-/// 6. Wait for the child to exit with `.wait()` (or rely on drop‑wait).
+/// # 实施步骤
+/// 1. 为“cat”创建一个命令，包含“.stdin（Stdio：:p iped（）”）“和”.stdout（Stdio：:p iped（））“。
+/// 2. '.spawn（）' 命令，用于获取带有“stdin”和“stdout”句柄的“Child”。
+/// 3. 将“输入”字节写入子节点的 stdin （'child.stdin.take（）.unwrap（）.write_all（...）`).
+/// 4. 放下标准段的柄（明确“丢”或让它脱离作用域）以关闭管道。
+/// 5. 读取子进程的 stdout（`child.stdout.take().unwrap().read_to_string(...)`）。
+/// 6. 使用 `.wait()` 等待子进程退出（或依赖 drop‑wait）。
 pub fn pipe_through_cat(input: &str) -> String {
     // TODO: Create "cat" command, set stdin and stdout to piped
     // TODO: Spawn process
