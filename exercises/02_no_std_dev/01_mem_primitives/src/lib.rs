@@ -1,32 +1,32 @@
 //! # no_std Memory Primitives
+
+//! 在 `#![no_std]` 环境中，你没有标准库——只有 `core`。
+//! 这些内存操作函数是操作系统内核中最基本的构建块。
+//! 在裸机环境中，像 libc 中的 memcpy/memset 这样的函数必须由我们自己实现。
+
+//! ## 任务
 //!
-//! In a `#![no_std]` environment, you have no standard library — only `core`.
-//! These memory operation functions are the most fundamental building blocks in an OS kernel.
-//! Functions like memcpy/memset in libc must be implemented by ourselves in bare-metal environments.
-//!
-//! ## Task
-//!
-//! Implement the following five functions:
-//! - Only use the `core` crate, no `std`
-//! - Do not call `core::ptr::copy`, `core::ptr::copy_nonoverlapping`, etc. (write your own loops)
-//! - Handle edge cases correctly (n=0, overlapping memory regions, etc.)
-//! - Pass all tests
+//! 实现以下五个函数：
+//! - 仅使用 `core` crate，不使用 `std`
+//! - 不调用 `core::ptr::copy`、`core::ptr::copy_nonoverlapping` 等函数（自己编写循环）
+//! - 正确处理边界情况（n=0、内存区域重叠等）
+//! - 通过所有测试
 
 // Force no_std in production; allow std in tests (cargo test framework requires it)
 #![cfg_attr(not(test), no_std)]
 #![allow(unused_variables)]
 
-/// Copy `n` bytes from `src` to `dst`.
+/// 将 `n` 字节从 `src` 复制到 `dst`。
 ///
-/// - `dst` and `src` must not overlap (use `my_memmove` for overlapping regions)
-/// - Returns `dst`
+/// - `dst` 和 `src` 不得重叠（对于重叠区域，请使用 `my_memmove`）
+/// - 返回 `dst`
 ///
-/// # Safety
-/// `dst` and `src` must each point to at least `n` bytes of valid memory.
+/// # 安全性
+/// `dst` 和 `src` 必须分别指向至少 `n` 字节的有效内存。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn my_memcpy(dst: *mut u8, src: *const u8, n: usize) -> *mut u8 {
-    // TODO: Implement memcpy
-    // Hint: read bytes from src one by one and write to dst
+    // TODO: 实现 memcpy
+    // 提示：逐个从 src 读取字节并写入 dst
     todo!()
 }
 
