@@ -1,45 +1,45 @@
-//! # Free-List Allocator
+//! # 自由链表分配器
 //!
-//! Building on the bump allocator, implement a Free-List Allocator that supports memory reclamation.
+//! 基于 bump 分配器，实施一个支持内存回收的自由链表分配器。
 //!
-//! ## How It Works
+//! ## 工作原理
 //!
-//! A Free-List Allocator uses a linked list to track all freed memory blocks.
-//! On allocation, it first searches the list for a suitable block (first-fit strategy);
-//! if none is found, it falls back to allocating from the unused region.
-//! On deallocation, the block is inserted at the head of the list.
+//! 自由链表分配器使用一个链表来跟踪所有已释放的内存块。
+//! 在分配时，它首先在链表中搜索一个合适的块（首次适配策略）；
+//! 如果未找到，则回退到从未使用的区域分配。
+//! 在释放时，该块被插入到链表的头部。
 //!
 //! ```text
 //! free_list -> [block A: 64B] -> [block B: 128B] -> [block C: 32B] -> null
 //! ```
 //!
-//! Each free block stores a `FreeBlock` struct at its head (containing block size and next pointer).
+//! 每个空闲块在其头部存储一个 `FreeBlock` 结构（包含块大小和下一个指针）。
 //!
-//! ## Task
+//! ## 任务
 //!
-//! Implement `FreeListAllocator`'s `alloc` and `dealloc` methods:
+//! 实现 `FreeListAllocator` 的 `alloc` 和 `dealloc` 方法：
 //!
 //! ### alloc
-//! 1. Traverse the free_list, find the first block with `size >= layout.size()` and proper alignment (first-fit)
-//! 2. If found, remove it from the list and return it
-//! 3. If not found, allocate from the `bump` region (same as bump allocator)
+//! 1. 遍历 free_list，找到第一个满足 `size >= layout.size()` 且对齐要求的块（首次适配）
+//! 2. 如果找到，从链表中移除并返回
+//! 3. 如果未找到，从 `bump` 区域分配（与 bump 分配器相同）
 //!
 //! ### dealloc
-//! 1. Write `FreeBlock` header info at the freed block
-//! 2. Insert it at the head of free_list
-//!
-//! ## Key Concepts
-//!
-//! - Intrusive linked list
-//! - `*mut T` read/write: `ptr.write(val)` / `ptr.read()`
-//! - Memory alignment checks
+//! 1. 将 `FreeBlock` 头信息写入已释放的块  
+//! 2. 将其插入到 free_list 的头部  
+//!  
+//! ## 关键概念  
+//!  
+//! - 内嵌链表  
+//! - `*mut T` 读/写：`ptr.write(val)` / `ptr.read()`  
+//! - 内存对齐检查  
 
 #![cfg_attr(not(test), no_std)]
 
 use core::alloc::{GlobalAlloc, Layout};
 use core::ptr::null_mut;
 
-/// Free block header, stored at the beginning of each free memory block
+/// 空闲块头，存储在每个空闲内存块的开头
 struct FreeBlock {
     size: usize,
     next: *mut FreeBlock,
@@ -67,8 +67,8 @@ unsafe impl Send for FreeListAllocator {}
 unsafe impl Sync for FreeListAllocator {}
 
 impl FreeListAllocator {
-    /// # Safety
-    /// `heap_start..heap_end` must be a valid readable and writable memory region.
+    /// # 安全性  
+    /// `heap_start..heap_end` 必须是一个有效的可读写内存区域。
     pub unsafe fn new(heap_start: usize, heap_end: usize) -> Self {
         Self {
             heap_start,
@@ -108,30 +108,67 @@ unsafe impl GlobalAlloc for FreeListAllocator {
         let size = layout.size().max(core::mem::size_of::<FreeBlock>());
         let align = layout.align().max(core::mem::align_of::<FreeBlock>());
 
-        // TODO: Step 1 — traverse free_list, find a suitable block (first-fit)
+        // TODO: 第1步 — 遍历 free_list，找到合适的块（首次适配）
         //
-        // Hints:
-        // - Use prev_ptr and curr to traverse the list
-        // - Check if curr address satisfies align, and (*curr).size >= size
-        // - If found, remove it from the list (update prev's next or the free_list head)
-        // - Return curr as *mut u8
-
-        // TODO: Step 2 — no suitable block in free_list, allocate from bump region
+        // 提示：
+        // - 使用 prev_ptr 和 curr 遍历列表
+        // - 检查 curr 地址是否满足对齐，并且 (*curr).size >= size
+        // - 如果找到，从列表中移除它（更新 prev 的 next 或 free_list 的头部）
+        // - 返回 curr 作为 *mut u8
+        let mut curr = self.free_list_head();
+        let mut prev_ptr: *mut FreeBlock = null_mut();
+        while !curr.is_null() {
+            let curr_addr = curr as usize;
+            if curr_addr % align == 0 && (*curr).size >= size {
+                if prev_ptr.is_null() {
+                    self.set_free_list_head((*curr).next);
+                } else {
+                    (*prev_ptr).next = (*curr).next;
+                }
+                return curr as *mut u8;
+            }
+            prev_ptr = curr;
+            curr = (*curr).next;
+        }
+        // TODO: 第2步 — free_list中没有合适的块，从bump区域分配
         //
-        // Same logic as 02_bump_allocator's alloc
-        todo!()
+        // 逻辑与02_bump_allocator的alloc相同
+        let mut bump = self.bump_next.load(core::sync::atomic::Ordering::Relaxed);
+        loop {
+            let aligned_bump = (bump + align - 1) & !(align - 1);
+            let next_bump = aligned_bump.checked_add(size).unwrap_or(self.heap_end);
+            if next_bump > self.heap_end {
+                return null_mut(); // Out of memory
+            }
+            match self.bump_next.compare_exchange_weak(
+                bump,
+                next_bump,
+                core::sync::atomic::Ordering::SeqCst,
+                core::sync::atomic::Ordering::Relaxed,
+            ) {
+                Ok(_) => return aligned_bump as *mut u8,
+                Err(current) => bump = current,
+            }
+        }
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         let size = layout.size().max(core::mem::size_of::<FreeBlock>());
 
-        // TODO: Insert the freed block at the head of free_list
+        // TODO: 将释放的块插入到 free_list 的头部
         //
-        // Steps:
-        // 1. Cast ptr to *mut FreeBlock
-        // 2. Write FreeBlock { size, next: current list head }
-        // 3. Update free_list head to ptr
-        todo!()
+        // 步骤：
+        // 1. 将 ptr 转换为 *mut FreeBlock
+        // 2. 写入 FreeBlock { size, next: 当前列表头部 }
+        // 3. 更新 free_list 的头部为 ptr
+        let free_block = ptr as *mut FreeBlock;
+        unsafe {
+            free_block.write(FreeBlock {
+                size,
+                next: self.free_list_head(),
+            });
+            self.set_free_list_head(free_block);
+        }
     }
 }
 

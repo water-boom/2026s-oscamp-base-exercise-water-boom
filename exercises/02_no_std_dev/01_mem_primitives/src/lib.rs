@@ -27,57 +27,113 @@
 pub unsafe extern "C" fn my_memcpy(dst: *mut u8, src: *const u8, n: usize) -> *mut u8 {
     // TODO: 实现 memcpy
     // 提示：逐个从 src 读取字节并写入 dst
-    todo!()
+    if n == 0 {
+        return dst;
+    }
+    unsafe {
+        for i in 0..n {
+            let byte = core::ptr::read(src.add(i));
+            core::ptr::write(dst.add(i), byte);
+        }
+    }
+    dst
 }
 
-/// Set `n` bytes starting at `dst` to the value `c`.
+/// 将从 `dst` 开始的 `n` 个字节设置为值 `c`。  
 ///
-/// Returns `dst`.
+/// 返回 `dst`。  
 ///
-/// # Safety
-/// `dst` must point to at least `n` bytes of valid writable memory.
+/// # 安全性  
+/// `dst` 必须指向至少 `n` 个字节的有效可写内存。  
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn my_memset(dst: *mut u8, c: u8, n: usize) -> *mut u8 {
-    // TODO: Implement memset
-    todo!()
+    unsafe {
+        for i in 0..n {
+            core::ptr::write(dst.add(i), c);
+        }
+    }
+    dst
 }
 
-/// Copy `n` bytes from `src` to `dst`, correctly handling overlapping memory.
+/// 将 `n` 字节从 `src` 复制到 `dst`，正确处理内存重叠。  
 ///
-/// Returns `dst`.
+/// 返回 `dst`。  
 ///
-/// # Safety
-/// `dst` and `src` must each point to at least `n` bytes of valid memory.
+/// # 安全性  
+/// `dst` 和 `src` 必须分别指向至少 `n` 字节的有效内存。  
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn my_memmove(dst: *mut u8, src: *const u8, n: usize) -> *mut u8 {
-    // TODO: Implement memmove
-    // Hint: when dst > src and regions overlap, copy backwards (from end to start)
-    todo!()
+    // TODO: 实现 memmove
+    // 提示：当 dst > src 且区域重叠时，从末尾向开始倒序复制
+    if n == 0 {
+        return dst;
+    }
+
+    unsafe {
+        let dst_addr = dst as usize;
+        let src_addr = src as usize;
+
+        // 判断是否重叠且需要倒序复制
+        if dst_addr > src_addr && dst_addr < src_addr + n {
+            // 重叠且 dst > src：从后向前复制
+            for i in (0..n).rev() {
+                core::ptr::copy(src.add(i), dst.add(i), 1);
+            }
+        } else {
+            // 不重叠或 dst <= src：从前向后复制
+            // 直接使用 copy 更高效（内部优化为 memcpy）
+            core::ptr::copy(src, dst, n);
+        }
+    }
+    dst
 }
 
-/// Return the length of a null-terminated byte string, excluding the trailing null.
+/// 返回一个以空字符结尾的字节字符串的长度，不包括末尾的空字符。  
 ///
-/// # Safety
-/// `s` must point to a valid null-terminated byte string.
+/// # 安全性  
+/// `s` 必须指向一个有效的以空字符结尾的字节字符串。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn my_strlen(s: *const u8) -> usize {
     // TODO: Implement strlen
-    todo!()
+    if s.is_null() {
+        return 0;
+    }
+    let mut len = 0;
+    unsafe {
+        while core::ptr::read(s.add(len)) != 0 {
+            len += 1;
+        }
+    }
+    len
 }
 
-/// Compare two null-terminated byte strings.
+/// 比较两个以空字符结尾的字节字符串。  
 ///
-/// Returns:
-/// - `0`  : strings are equal
-/// - `< 0`: `s1` is lexicographically less than `s2`
-/// - `> 0`: `s1` is lexicographically greater than `s2`
+/// 返回值：  
+/// - `0`  ：字符串相等  
+/// - `< 0`：`s1` 按字典序小于 `s2`  
+/// - `> 0`：`s1` 按字典序大于 `s2`  
 ///
-/// # Safety
-/// `s1` and `s2` must each point to a valid null-terminated byte string.
+/// # 安全性  
+/// `s1` 和 `s2` 必须分别指向有效的以空字符结尾的字节字符串。  
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn my_strcmp(s1: *const u8, s2: *const u8) -> i32 {
     // TODO: Implement strcmp
-    todo!()
+    let mut i = 0;
+    unsafe {
+        loop {
+            let c1 = core::ptr::read(s1.add(i));
+            let c2 = core::ptr::read(s2.add(i));
+            if c1 != c2 {
+                return (c1 as i32) - (c2 as i32);
+            }
+            if c1 == 0 {
+                break;
+            }
+            i += 1;
+        }
+    }
+    0
 }
 
 // ============================================================

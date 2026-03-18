@@ -1,46 +1,44 @@
-//! # File Descriptor Table
-//!
-//! Implement a simple file descriptor (fd) table — the core data structure
-//! for managing open files in an OS kernel.
-//!
-//! ## Background
-//!
-//! In the Linux kernel, each process has an fd table that maps integer fds to kernel file objects.
-//! User programs perform read/write/close via fds, and the kernel looks up the corresponding
-//! file object through the fd table.
-//!
-//! ```text
-//! fd table:
-//!   0 -> Stdin
-//!   1 -> Stdout
-//!   2 -> Stderr
-//!   3 -> File("/etc/passwd")
-//!   4 -> (empty)
-//!   5 -> Socket(...)
-//! ```
-//!
-//! ## Task
-//!
-//! Implement the following methods on `FdTable`:
-//!
-//! - `new()` — create an empty fd table
-//! - `alloc(file)` -> `usize` — allocate a new fd, return the fd number
-//!   - Prefer reusing the smallest closed fd number
-//!   - If no free slot, extend the table
-//! - `get(fd)` -> `Option<Arc<dyn File>>` — get the file object for an fd
-//! - `close(fd)` -> `bool` — close an fd, return whether it succeeded (false if fd doesn't exist)
-//! - `count()` -> `usize` — return the number of currently allocated fds (excluding closed ones)
-//!
-//! ## Key Concepts
-//!
-//! - Trait objects: `Arc<dyn File>`
-//! - `Vec<Option<T>>` as a sparse table
-//! - fd number reuse strategy (find smallest free slot)
-//! - `Arc` reference counting and resource release
+// ! # 文件描述符表
+// !
+// ! 实现一个简单的文件描述符（fd）表——用于管理操作系统内核中打开文件的核心数据结构。
+// !
+// ! ## 背景
+// !
+// ! 在 Linux 内核中，每个进程都有一个 fd 表，用于将整数 fd 映射到内核文件对象。
+// ! 用户程序通过 fd 执行读/写/关闭操作，内核通过 fd 表查找对应的文件对象。
+// !
+// ! ```text
+// ! fd 表：
+// !   0 -> 标准输入
+// !   1 -> 标准输出
+// !   2 -> 标准错误
+// !   3 -> 文件("/etc/passwd")
+// !   4 -> （空）
+// !   5 -> 套接字(...)
+// ! ```
+// !
+// ! ## 任务
+// !
+// ! 在 `FdTable` 上实现以下方法：
+// !
+// ! - `new()` — 创建一个空的 fd 表
+// ! - `alloc(file)` -> `usize` — 分配一个新的 fd，返回 fd 编号
+// !   - 优先重用最小的已关闭 fd 编号
+// !   - 如果没有空闲槽，则扩展表
+// ! - `get(fd)` -> `Option<Arc<dyn File>>` — 获取 fd 对应的文件对象
+// ! - `close(fd)` -> `bool` — 关闭一个 fd，返回是否成功（如果 fd 不存在则返回 false）
+// ! - `count()` -> `usize` — 返回当前已分配的文件描述符数量（不包括已关闭的）
+// !
+// ! ## 关键概念
+// !
+// ! - 特性对象：`Arc<dyn File>`
+// ! - 使用 `Vec<Option<T>>` 作为稀疏表
+// ! - 文件描述符编号重用策略（寻找最小的空闲槽位）
+// ! - `Arc` 引用计数和资源释放
 
 use std::sync::Arc;
 
-/// File abstraction trait — all "files" in the kernel (regular files, pipes, sockets) implement this
+/// 文件抽象特性——内核中的所有“文件”（常规文件、管道、套接字）都实现了这一点
 pub trait File: Send + Sync {
     fn read(&self, buf: &mut [u8]) -> isize;
     fn write(&self, buf: &[u8]) -> isize;
@@ -48,42 +46,56 @@ pub trait File: Send + Sync {
 
 /// File descriptor table
 pub struct FdTable {
-    // TODO: Design the internal structure
-    // Hint: use Vec<Option<Arc<dyn File>>>
-    //       the index is the fd number, None means the fd is closed or unallocated
+    // TODO: 设计内部结构
+    // 提示：使用 Vec<Option<Arc<dyn File>>>
+    //       索引是文件描述符（fd）编号，None 表示 fd 已关闭或未分配
+    table: Vec<Option<Arc<dyn File>>>,
 }
 
 impl FdTable {
     /// Create an empty fd table
     pub fn new() -> Self {
         // TODO
-        todo!()
+        Self { table: Vec::new() }
     }
 
-    /// Allocate a new fd, return the fd number.
+    /// 分配一个新的文件描述符，返回文件描述符编号。  
     ///
-    /// Prefers reusing the smallest closed fd number; if no free slot, appends to the end.
+    /// 优先复用最小的已关闭文件描述符编号；如果没有空闲槽，则追加到末尾。
     pub fn alloc(&mut self, file: Arc<dyn File>) -> usize {
         // TODO
-        todo!()
+        for (i, slot) in self.table.iter_mut().enumerate() {
+            if slot.is_none() {
+                *slot = Some(file);
+                return i;
+            }
+        }
+        self.table.push(Some(file));
+        self.table.len() - 1
     }
 
     /// Get the file object for an fd. Returns None if the fd doesn't exist or is closed.
     pub fn get(&self, fd: usize) -> Option<Arc<dyn File>> {
         // TODO
-        todo!()
+        self.table.get(fd)?.clone()
     }
 
     /// Close an fd. Returns true on success, false if the fd doesn't exist or is already closed.
     pub fn close(&mut self, fd: usize) -> bool {
         // TODO
-        todo!()
+        for slot in self.table.get_mut(fd) {
+            if slot.is_some() {
+                *slot = None;
+                return true;
+            }
+        }
+        false
     }
 
     /// Return the number of currently allocated fds (excluding closed ones)
     pub fn count(&self) -> usize {
         // TODO
-        todo!()
+        self.table.iter().filter(|slot| slot.is_some()).count()
     }
 }
 
